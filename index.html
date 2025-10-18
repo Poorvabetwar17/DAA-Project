@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Fake Job Posting Detector — Demo</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#eef2f7;
+      --card:#ffffff;
+      --accent:#0b7285;
+      --muted:#6b7280;
+      --danger:#d90429;
+      --good:#06d6a0;
+      --btn:#1d3557;
+    }
+    *{box-sizing:border-box;font-family:'Poppins',system-ui,Segoe UI,Roboto,Arial;}
+    body{margin:0;background:linear-gradient(180deg,#f7fbfd,#eef6fa);color:#122;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+    .app{width:100%;max-width:980px;background:var(--card);border-radius:14px;box-shadow:0 10px 30px rgba(10,20,30,0.08);overflow:hidden;display:grid;grid-template-columns:300px 1fr}
+    .sidebar{background:linear-gradient(180deg,var(--accent),#2a9d8f);color:#fff;padding:20px}
+    .sidebar h2{margin:0 0 12px;font-size:18px}
+    .examples button{display:block;width:100%;margin:8px 0;padding:10px;border-radius:8px;border:none;background:rgba(255,255,255,0.08);color:#fff;text-align:left;cursor:pointer}
+    .examples button:hover{background:rgba(255,255,255,0.12)}
+    .main{padding:24px}
+    .title{display:flex;justify-content:space-between;align-items:center}
+    .title h1{margin:0;font-size:20px}
+    textarea{width:100%;height:180px;padding:14px;border-radius:10px;border:1px solid #e6e9ee;font-size:14px;resize:vertical}
+    .controls{margin-top:12px;display:flex;gap:8px;flex-wrap:wrap}
+    .btn{padding:10px 14px;border-radius:10px;border:none;background:var(--btn);color:#fff;cursor:pointer;font-weight:600}
+    .btn.secondary{background:#fff;color:#1d3557;border:1px solid #e6e9ee}
+    .result{margin-top:16px;font-size:16px;font-weight:700}
+    .confidence{margin-top:6px;font-size:14px;color:var(--muted)}
+    .progress{height:12px;background:#e6eef5;border-radius:999px;margin-top:8px;overflow:hidden}
+    .progress > i{display:block;height:100%;background:linear-gradient(90deg,var(--good),#2a9d8f);width:0%}
+    .add-sample{margin-top:16px;display:flex;gap:8px;align-items:center}
+    .small{font-size:13px;color:var(--muted)}
+    .footer{padding:12px;font-size:13px;color:var(--muted);text-align:center;background:linear-gradient(180deg,rgba(0,0,0,0.02),transparent)}
+    @media (max-width:820px){
+      .app{grid-template-columns:1fr;max-width:720px}
+      .sidebar{order:2}
+    }
+  </style>
+</head>
+<body>
+
+  <div class="app" role="application" aria-labelledby="app-heading">
+    <aside class="sidebar">
+      <h2>Quick Examples</h2>
+      <div class="examples">
+        <button data-text="Hiring for data entry job, work from home, no registration fee">Data entry WFH</button>
+        <button data-text="Looking for experienced Python developer at Google office">Real dev job</button>
+        <button data-text="Congratulations! You have won a free iPhone, click the link to claim">Scam prize</button>
+        <button data-text="Work from home and earn ₹1 lakh per month — apply now!">High pay WFH</button>
+      </div>
+
+      <hr style="border:none;height:1px;background:rgba(255,255,255,0.12);margin:12px 0">
+      <div class="small">Add training sample</div>
+      <input id="sampleText" placeholder="Enter sample text" style="width:100%;margin-top:8px;padding:8px;border-radius:8px;border:none">
+      <div style="display:flex;margin-top:8px;gap:8px">
+        <select id="sampleLabel" style="flex:1;padding:8px;border-radius:8px;border:none">
+          <option value="real">real</option>
+          <option value="fake">fake</option>
+        </select>
+        <button id="addRetrain" class="btn" style="padding:8px 10px">Add & Retrain</button>
+      </div>
+      <div style="margin-top:16px" class="small">Model trained in browser (Naive Bayes). Add samples to improve results.</div>
+    </aside>
+
+    <main class="main">
+      <div class="title">
+        <h1>🧠 Fake Job Posting Detector</h1>
+        <div style="font-size:13px;color:#556">No backend — runs client-side</div>
+      </div>
+
+      <div style="margin-top:12px" class="small">Enter job description:</div>
+      <textarea id="inputText" placeholder="Paste job description here..."></textarea>
+
+      <div class="controls">
+        <button id="checkBtn" class="btn">🔍 Check Authenticity</button>
+        <button id="clearBtn" class="btn secondary">Clear</button>
+      </div>
+
+      <div id="result" class="result" aria-live="polite"></div>
+      <div id="confidence" class="confidence"></div>
+      <div class="progress" aria-hidden="true"><i id="progbar"></i></div>
+
+      <div class="add-sample">
+        <div class="small">Or test quickly:</div>
+        <button data-text="Hiring for data entry job, work from home, no registration fee" class="btn secondary example-inline">Try Example</button>
+      </div>
+
+    </main>
+  </div>
+
+  <div class="footer">Developed for DAA Mini Project • Browser Naive Bayes demo</div>
+
+<script>
+/* Simple tokenizer + multinomial naive bayes implementation in JS */
+const dataset = [
+  {text:"Hiring for data entry job, work from home, no registration fee", label:"real"},
+  {text:"Urgent requirement for software developer, contact HR immediately", label:"real"},
+  {text:"Congratulations! You have won a free iPhone, click the link to claim", label:"fake"},
+  {text:"Part-time typing job, earn ₹5000 per day easily", label:"fake"},
+  {text:"Looking for experienced Python developer at Google office", label:"real"},
+  {text:"Register now and earn money instantly by filling online surveys", label:"fake"},
+  {text:"We are hiring AI engineers with 2 years of experience", label:"real"},
+  {text:"Limited time offer! Work from home and make ₹1 lakh per month", label:"fake"}
+];
+
+let model = null;
+
+// utilities
+function tokenize(s){
+  return s.toLowerCase().replace(/[^a-z0-9\s₹]/g,' ').split(/\s+/).filter(Boolean);
+}
+
+// train multinomial NB with Laplace smoothing
+function train(data, alpha=1){
+  const classes = {};
+  const vocab = new Set();
+  data.forEach(d => {
+    const cls = d.label;
+    classes[cls] = classes[cls] || {count:0, wordCounts:{}};
+    classes[cls].count += 1;
+    const tokens = tokenize(d.text);
+    tokens.forEach(t => {
+      vocab.add(t);
+      classes[cls].wordCounts[t] = (classes[cls].wordCounts[t] || 0) + 1;
+    });
+  });
+
+  const totalDocs = data.length;
+  const model = {classes, vocabSize: vocab.size, totalDocs, alpha};
+  // precompute denominators
+  for(const cls in classes){
+    const wc = Object.values(classes[cls].wordCounts).reduce((a,b)=>a+b,0);
+    classes[cls].denom = wc + alpha * model.vocabSize;
+    classes[cls].prior = classes[cls].count / totalDocs;
+  }
+  return model;
+}
+
+function predict(model, text){
+  const tokens = tokenize(text);
+  const scores = {};
+  for(const cls in model.classes){
+    // log-probability
+    let logp = Math.log(model.classes[cls].prior + 1e-12);
+    tokens.forEach(t => {
+      const count = model.classes[cls].wordCounts[t] || 0;
+      const prob = (count + model.alpha) / model.classes[cls].denom;
+      logp += Math.log(prob + 1e-12);
+    });
+    scores[cls] = logp;
+  }
+  // convert log scores to probabilities
+  const maxLog = Math.max(...Object.values(scores));
+  const exps = {};
+  let sum = 0;
+  for(const cls in scores){
+    exps[cls] = Math.exp(scores[cls] - maxLog);
+    sum += exps[cls];
+  }
+  const probs = {};
+  for(const cls in exps) probs[cls] = exps[cls] / sum;
+  // choose best
+  let best = null; let bestP = -1;
+  for(const cls in probs) { if(probs[cls] > bestP){best = cls; bestP = probs[cls];} }
+  return {label: best, probabilities: probs};
+}
+
+// train initial model
+function retrain() {
+  model = train(dataset, 1);
+}
+
+// UI wiring
+document.addEventListener("DOMContentLoaded", ()=>{
+  retrain();
+  const input = document.getElementById("inputText");
+  const checkBtn = document.getElementById("checkBtn");
+  const result = document.getElementById("result");
+  const confidence = document.getElementById("confidence");
+  const prog = document.getElementById("progbar");
+
+  checkBtn.onclick = ()=>{
+    const txt = input.value.trim();
+    if(!txt){ alert("Enter a job description"); return; }
+    const out = predict(model, txt);
+    if(out.label === "fake"){
+      result.textContent = "⚠️ This job post seems FAKE!";
+      result.style.color = "var(--danger)";
+    } else {
+      result.textContent = "✅ This job post seems REAL!";
+      result.style.color = "var(--good)";
+    }
+    const conf = Math.max(...Object.values(out.probabilities));
+    confidence.textContent = `Confidence: ${(conf*100).toFixed(1)}%`;
+    prog.style.width = `${(conf*100).toFixed(1)}%`;
+  };
+
+  document.getElementById("clearBtn").onclick = ()=>{
+    input.value = ""; result.textContent=""; confidence.textContent=""; prog.style.width = "0%";
+  };
+
+  // sidebar example buttons
+  document.querySelectorAll(".examples button, .example-inline").forEach(b=>{
+    b.addEventListener("click", (e)=>{
+      const t = e.currentTarget.getAttribute("data-text");
+      input.value = t;
+    });
+  });
+
+  // add & retrain
+  document.getElementById("addRetrain").addEventListener("click", ()=>{
+    const stext = document.getElementById("sampleText").value.trim();
+    const sl = document.getElementById("sampleLabel").value;
+    if(!stext){ alert("Enter sample text before adding."); return; }
+    dataset.push({text: stext, label: sl});
+    retrain();
+    alert("Sample added and model retrained in browser.");
+    document.getElementById("sampleText").value = "";
+  });
+
+});
+</script>
+
+</body>
+</html>
